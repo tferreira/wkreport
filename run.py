@@ -88,9 +88,9 @@ class WaniKaniScraper():
 
 @click.command()
 @click.option("--username", help="Wanikani username", required=True)
-@click.option("--webhook-url", help="Slack webhook URL")
+@click.option("--webhook-url", help="Mattermost webhook URL")
 def run(username, webhook_url):
-    """Parses a public WaniKani profile and sends a report to Slack"""
+    """Parses a public WaniKani profile and sends a report to Mattermost"""
     # Parse website
     scraper = WaniKaniScraper(username)
     stats = scraper.get_stats()
