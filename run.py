@@ -111,7 +111,18 @@ def run(username, webhook_url):
     # Build markdown table lines
     lines = ["|", "|", "|", "|"]  # stages, radicals, kanji, vocabulary
     for stage, stage_data in stats["srs-stages"].items():
-        lines[0] += f'{stage}|{stage_data["total"]}|'
+        if stage == "Apprentice":
+            emoji = ":egg:"
+        if stage == "Guru":
+            emoji = ":hatching_chick:"
+        if stage == "Master":
+            emoji = ":hatched_chick:"
+        if stage == "Enlightened":
+            emoji = ":mage:"
+        if stage == "Burned":
+            emoji = ":fire:"
+
+        lines[0] += f'{stage} {emoji}|{stage_data["total"]}|'
         for i, (subject, subject_data) in enumerate(stage_data["subjects"].items(), start=1):
             lines[i] += f'{subject}|{subject_data["count"]}|'
     lines.insert(1, "|---|---|---|---|---|")
