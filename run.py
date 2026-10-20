@@ -7,6 +7,32 @@ from typing import Any
 import click
 import requests
 from bs4 import BeautifulSoup
+from wcwidth import wcswidth
+
+
+STAGE_EMOJI = {
+    "Apprentice": "🥚",
+    "Guru": "🐣",
+    "Master": "🐥",
+    "Enlightened": "🧙",
+    "Burned": "🔥",
+}
+
+
+def cell_width(text: str) -> int:
+    """Width of `text` in monospace cells (an emoji spans two cells, not one).
+
+    `len()` counts code points, so an emoji header padded with it throws off
+    every number beneath it. `wcswidth` measures the rendered cell width.
+    """
+    width = wcswidth(text)
+    return width if width >= 0 else len(text)
+
+
+def pad_cell(text: str, width: int, right: bool = False) -> str:
+    """Pad `text` to `width` monospace cells, measuring emoji as two cells."""
+    gap = max(0, width - cell_width(text))
+    return " " * gap + text if right else text + " " * gap
 
 
 class WaniKaniScraper():
@@ -305,10 +331,18 @@ def run(username, webhook_url, token, wk_token):
     lead = f'**{stats["username"]}** · {stats["stage"]} {stats["level"]}'
 
     def bar(known: int, maximum: int, width: int = 24) -> str:
-        """Draws a monospace progress bar; renders the same on desktop/mobile."""
+        """Draws a monospace progress bar; renders the same on desktop/mobile.
+
+        Fill is `█` and the empty track is plain spaces inside `[ ]`. Both the
+        block and the space are true monospace, so the closing bracket (and the
+        percent after it) land in the same column on every row. The old empty
+        glyph `░` broke this: it isn't in every phone's monospace font, so it
+        fell back to a different-width glyph and dragged the trailing text out
+        of alignment whenever two bars had a different fill count.
+        """
         filled = round((known / maximum) * width) if maximum else 0
         filled = max(0, min(width, filled))
-        return "█" * filled + "░" * (width - filled)
+        return "[" + "█" * filled + " " * (width - filled) + "]"
 
     progress_lines = [
         f'Kanji       {bar(kanji["known"], kanji["max"])} {kanji["percent"]:>4}  {kanji["known"]}/{kanji["max"]}',
@@ -327,12 +361,15 @@ def run(username, webhook_url, token, wk_token):
     # block. The Mattermost mobile app doesn't render markdown tables (it shows
     # the raw pipes, as on desktop it renders them), but it does render fenced
     # code blocks in a monospace font, so an aligned ASCII table keeps the same
-    # layout on both. Emoji would break the monospace alignment, so the stage
-    # names are used plain as headers (and the emoji legend is dropped).
+    # layout on both. The stage headers are emoji (STAGE_EMOJI) kept narrow so
+    # the five columns fit a phone screen; columns are padded by display width
+    # (cell_width), not len(), because an emoji spans two monospace cells but
+    # counts as one code point — padding with len() would drift the numbers.
     stages = list(stats["srs-stages"].keys())
+    headers = [STAGE_EMOJI.get(s, s) for s in stages]
 
     # Build the grid: a label column, then one column per stage.
-    rows = [[""] + stages]
+    rows = [[""] + headers]
     for subject in ("Radicals", "Kanji", "Vocabulary"):
         row = [subject]
         for stage in stages:
@@ -341,12 +378,13 @@ def run(username, webhook_url, token, wk_token):
         rows.append(row)
     rows.append(["Total"] + [str(stats["srs-stages"][s]["total"]) for s in stages])
 
-    # Right-align the numeric columns to the widest value in each.
-    widths = [max(len(row[c]) for row in rows) for c in range(len(rows[0]))]
+    # Right-align the numeric columns to the widest value in each, measuring
+    # width in monospace cells so the emoji headers sit over their numbers.
+    widths = [max(cell_width(row[c]) for row in rows) for c in range(len(rows[0]))]
     table_lines = []
     for row in rows:
-        cells = [row[0].ljust(widths[0])]
-        cells += [row[c].rjust(widths[c]) for c in range(1, len(row))]
+        cells = [pad_cell(row[0], widths[0])]
+        cells += [pad_cell(row[c], widths[c], right=True) for c in range(1, len(row))]
         table_lines.append("  ".join(cells).rstrip())
     # One code block: progress bars (+ optional API stats), blank line, grid.
     block = "```\n" + "\n".join(progress_lines + api_lines + [""] + table_lines) + "\n```"

@@ -14,9 +14,16 @@ API are added when `--wk-token` is supplied. See `README.md` for usage.
   *mobile* app does NOT render Markdown tables — it prints the raw `|` pipes.
   Do not "improve" the layout into a Markdown table; it will look fine on
   desktop and broken on phones.
-- **No emoji inside the code block.** Emoji aren't single-width, so they break
-  the monospace column alignment. Stage headers are plain words on purpose
-  (an emoji legend was tried and removed).
+- **Emoji inside the code block are fine, but pad by display width, not
+  `len()`.** An emoji spans two monospace cells yet counts as one code point,
+  so `str.ljust`/`len` drift every column after it. Measure with `cell_width`
+  and pad with `pad_cell` (both wcwidth-backed). The SRS stage headers are
+  emoji (`STAGE_EMOJI`), kept emoji-only so the five columns fit a phone.
+  Constraints that still bite: stick to single-codepoint emoji that wcwidth
+  reports as width 2 — ZWJ sequences and variation selectors (e.g. ❤️) can
+  misreport. And the progress bar's empty track is spaces inside `[ ]`, never
+  the light-shade `░`: that glyph isn't in every phone's monospace font, so it
+  falls back to a different width and knocks the trailing text out of line.
 - **JLPT coverage is curriculum-based, not SRS-based.** A kanji counts as
   covered once its `wk_level <= your current level` (this matches wkstats). It
   needs no API call — only `jlpt_kanji.json` and the scraped level.
